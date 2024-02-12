@@ -1,0 +1,11 @@
+@AuthService_HostAddress = http://localhost:5027
+
+### Login
+POST {{AuthService_HostAddress}}/login
+Content-Type: application/json
+
+{
+  "Username": "user@example.com",
+  "Password": "yourPassword"
+}
+
