@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using AuthService;
 using AuthService.Models;
@@ -44,10 +45,9 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    app.UseAuthentication();
-    app.UseAuthorization();
 }
-
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseHttpsRedirection();
 
 app.MapPost("/login", async (LoginModel loginModel, UserManager<ApplicationUser> userManager, IConfiguration configuration) =>
@@ -66,17 +66,24 @@ app.MapPost("/login", async (LoginModel loginModel, UserManager<ApplicationUser>
 
 static string GenerateJwtToken(ApplicationUser user, IConfiguration configuration)
 {
-    var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!));
-    var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+    var claims = new[]
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, user.UserName ?? throw new InvalidOperationException()),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim(ClaimTypes.NameIdentifier, user.Id)
+    };
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    var expires = DateTime.Now.AddMinutes(double.Parse(configuration["Jwt:ExpireMinutes"]!));
 
-    var token = new JwtSecurityToken(configuration["Jwt:Issuer"],
+    var token = new JwtSecurityToken(
+        configuration["Jwt:Issuer"],
         configuration["Jwt:Audience"],
-        expires: DateTime.Now.AddMinutes(120),
-        signingCredentials: credentials);
+        claims,
+        expires: expires,
+        signingCredentials: creds);
 
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
 app.Run();
-
-record LoginRequest(string Username, string Password);
