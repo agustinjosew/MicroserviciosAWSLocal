@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using NLog;
+using NLog.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +42,7 @@ builder.Services.AddAuthentication(options =>
         };
     });
 var app = builder.Build();
+var logger = LogManager.Setup().LoadConfigurationFromAppSettings("nlog.config").GetCurrentClassLogger();
 
 if (app.Environment.IsDevelopment())
 {
@@ -52,13 +55,18 @@ app.UseHttpsRedirection();
 
 app.MapPost("/login", async (LoginModel loginModel, UserManager<ApplicationUser> userManager, IConfiguration configuration) =>
     {
-        var user = await userManager.FindByEmailAsync(loginModel.Email);
-        if (user != null && await userManager.CheckPasswordAsync(user, loginModel.Password))
+        if (loginModel.Email != null)
         {
-            var token = GenerateJwtToken(user, configuration);
-            return Results.Ok(new { Token = token });
+            var user = await userManager.FindByEmailAsync(loginModel.Email);
+            if (loginModel.Password != null && user != null && await userManager.CheckPasswordAsync(user, loginModel.Password))
+            {
+                logger.Info("Inicio de sesión exitoso para el usuario con ID: {UserId}", user.Id); // Usa el ID en lugar del email
+                var token = GenerateJwtToken(user, configuration);
+                return Results.Ok(new { Token = token });
+            }
         }
 
+        logger.Warn("Intento de inicio de sesión fallido para un usuario con Email: {Email}", loginModel.Email);
         return Results.Unauthorized();
     })
     .WithName("Login")
